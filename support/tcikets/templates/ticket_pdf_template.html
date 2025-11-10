@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            
+            @top-right {
+                content: "Page " counter(page) " sur " counter(pages);
+                font-size: 10px;
+            }
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #4a86e8;
+            padding-bottom: 10px;
+        }
+        
+        .company-info {
+            text-align: right;
+            font-size: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .ticket-info {
+            margin-bottom: 20px;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            background-color: #4a86e8;
+            color: white;
+            padding: 5px 10px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .info-item {
+            margin-bottom: 8px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .description {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        
+        .intervention {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .image-item {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: center;
+        }
+        
+        .image-item img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .cost-summary {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        
+        .total-cost {
+            font-weight: bold;
+            font-size: 16px;
+            color: #4a86e8;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="company-info">
+        <strong>Société XYZ</strong><br>
+        123 Rue de l'Example<br>
+        75000 Paris, France<br>
+        Tél: +33 1 23 45 67 89<br>
+        Email: contact@xyz.com
+    </div>
+    
+    <div class="header">
+        <h1>FICHE TICKET #{{ ticket.id }}</h1>
+        <p>Généré le {{ now|date:"d/m/Y à H:i" }}</p>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">INFORMATIONS GÉNÉRALES</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Statut:</span>
+                {{ ticket.get_status_display }}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Priorité:</span>
+                {{ ticket.get_priority_display }}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Date de création:</span>
+                {{ ticket.created_at|date:"d/m/Y H:i" }}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Date de modification:</span>
+                {{ ticket.updated_at|date:"d/m/Y H:i" }}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Client:</span>
+                {{ ticket.client.user.get_full_name }}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Technicien:</span>
+                {% if ticket.technician %}{{ ticket.technician.user.get_full_name }}{% else %}Non assigné{% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-title">DESCRIPTION DU PROBLÈME</div>
+        <div class="description">
+            {{ ticket.description|linebreaks }}
+        </div>
+    </div>
+    
+    {% if ticket.images.all %}
+    <div class="section">
+        <div class="section-title">IMAGES ASSOCIÉES</div>
+        <div class="image-grid">
+            {% for image in ticket.images.all %}
+            <div class="image-item">
+                <img src="data:image/jpeg;base64,{{ image.image_base64 }}" alt="Image {{ forloop.counter }}">
+                <p>Image {{ forloop.counter }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if interventions %}
+    <div class="section">
+        <div class="section-title">INTERVENTIONS</div>
+        {% for intervention in interventions %}
+        <div class="intervention">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Date:</span>
+                    {{ intervention.intervention_date|date:"d/m/Y" }}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Technicien:</span>
+                    {{ intervention.technician.user.get_full_name }}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Heure de début:</span>
+                    {{ intervention.start_time|time:"H:i" }}
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Heure de fin:</span>
+                    {{ intervention.end_time|time:"H:i" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Description:</span><br>
+                {{ intervention.description|linebreaks }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="section">
+        <div class="section-title">INFORMATIONS FINANCIÈRES</div>
+        <div class="cost-summary">
+            <div class="info-item">
+                <span class="info-label">Coût des pièces:</span>
+                {% if ticket.parts_cost %}{{ ticket.parts_cost }} FCFA{% else %}0 FCFA{% endif %}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Coût de la main d'œuvre:</span>
+                {% if ticket.labor_cost %}{{ ticket.labor_cost }} FCFA{% else %}0 FCFA{% endif %}
+            </div>
+            <div class="info-item">
+                <span class="info-label">Autres frais:</span>
+                {% if ticket.other_costs %}{{ ticket.other_costs }} FCFA{% else %}0 FCFA{% endif %}
+            </div>
+            <div class="total-cost">
+                COÛT TOTAL: {{ ticket.total_cost }} FCFA
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        Document généré le {{ now|date:"d/m/Y à H:i" }} - Société XYZ - Tous droits réservés
+    </div>
+</body>
+</html>

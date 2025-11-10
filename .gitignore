@@ -1,0 +1,52 @@
+# =====================
+# PYTHON / DJANGO
+# =====================
+__pycache__/
+.py[cod]
+*.py~
+*.swp
+db.sqlite3
+*.log
+
+# Django media & static
+media/
+staticfiles/
+
+.env
+.env.local
+.env.*.local
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Migrations cache
+*/migrations/__pycache__/
+backend/*/migrations/*.pyc
+
+# =====================
+# REACT / FRONTEND
+# =====================
+frontend/node_modules/
+frontend/.pnp/
+frontend/.pnp.js
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/build/
+frontend/dist/
+
+# =====================
+# EDITOR / SYSTEM FILES
+# =====================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+*.log
+*.orig
+".env" 
