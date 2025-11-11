@@ -1,4 +1,5 @@
 import os, re, uuid, mimetypes, logging
+from io import BytesIO
 from PIL import Image as PILImage
 from io import BytesIO
 from django.core.files.base import ContentFile
@@ -41,6 +42,11 @@ def procedure_attachment_path(instance, filename):
     safe_filename = f"{uuid.uuid4()}.{ext}"
     return os.path.join('procedures', str(instance.procedure.id), 'attachments', safe_filename)
 
+def intervention_image_path(instance, filename):
+    """Chemin Cloudinary : interventions/<intervention_id>/images/<uuid>.<ext>"""
+    ext = filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join('interventions', str(instance.intervention.id), 'images', filename)
 # ------------------------------------------------------------------
 # USER (avatar Cloudinary + userType)
 # ------------------------------------------------------------------
@@ -661,14 +667,109 @@ class Intervention(models.Model):
 class InterventionImage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     intervention = models.ForeignKey(Intervention, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='intervention_images/')
+    image = models.ImageField(upload_to=intervention_image_path, max_length=500)
     caption = models.CharField(max_length=200, blank=True, null=True)
+    alt_text = models.CharField(max_length=200, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"Image for {self.intervention.ticket.title}"
+    order = models.PositiveIntegerField(default=0)
 
-    
+    # Métadonnées
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    file_size = models.PositiveIntegerField(null=True, blank=True)
+    file_extension = models.CharField(max_length=10, blank=True, default='')
+
+    # ------------------------------------------------------------------
+    # Sauvegarde : remplit tailles, poids, extension
+    # ------------------------------------------------------------------
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        if self.image and is_new:
+            try:
+                name = getattr(self.image, 'name', '')
+                _, ext = os.path.splitext(name)
+                self.file_extension = ext.lower() if ext else '.png'
+
+                self.image.seek(0)
+                img = PILImage.open(self.image)
+                self.width, self.height = img.size
+                self.file_size = self.image.size
+                self.image.seek(0)
+            except Exception as e:
+                logging.getLogger(__name__).error(f"InterventionImage metadata error: {e}")
+        super().save(*args, **kwargs)
+
+    # ------------------------------------------------------------------
+    # Helpers Cloudinary
+    # ------------------------------------------------------------------
+    def _get_cloudinary_public_id(self):
+        if not self.image:
+            return None
+        path = str(self.image)
+        return re.sub(r'\.[^.]+$', '', path)
+
+    def _get_file_extension(self):
+        if self.file_extension:
+            return self.file_extension if self.file_extension.startswith('.') else f'.{self.file_extension}'
+        return '.png'
+
+    def get_image_url(self, **transformations):
+        if not self.image:
+            return None
+        public_id = self._get_cloudinary_public_id()
+        ext = self._get_file_extension()
+        try:
+            return CloudinaryImage(f"{public_id}{ext}").build_url(**transformations)
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Cloudinary URL error: {e}")
+            return self.image.url if hasattr(self.image, 'url') else None
+
+    # ------------------------------------------------------------------
+    # URLs prêtes à l’emploi
+    # ------------------------------------------------------------------
+    @property
+    def image_url(self):
+        return self.get_image_url()
+
+    @property
+    def thumbnail_url(self):
+        return self.get_image_url(
+            width=150, height=150, crop='fill', gravity='auto',
+            quality='auto', fetch_format='auto'
+        )
+
+    @property
+    def medium_url(self):
+        return self.get_image_url(
+            width=800, crop='limit', quality='auto', fetch_format='auto'
+        )
+
+    @property
+    def large_url(self):
+        return self.get_image_url(
+            width=1200, crop='limit', quality='auto', fetch_format='auto'
+        )
+
+    @property
+    def webp_url(self):
+        return self.get_image_url(
+            width=800, crop='limit', quality='auto', fetch_format='webp'
+        )
+
+    def get_responsive_urls(self):
+        """Retourne tous les formats utiles (comme ProcedureImage)"""
+        return {
+            'thumbnail': self.thumbnail_url,
+            'medium': self.medium_url,
+            'large': self.large_url,
+            'webp': self.webp_url,
+        }
+
+    # ------------------------------------------------------------------
+    # Représentation string
+    # ------------------------------------------------------------------
+    def __str__(self):
+        return f"Image for {self.intervention.ticket.title if self.intervention else 'Temp'}"
 
 class InterventionMaterial(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

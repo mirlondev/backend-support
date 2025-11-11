@@ -124,7 +124,9 @@ class ProcedureListCreateView(generics.ListCreateAPIView):
 
         if self.request.user.is_authenticated:
             return queryset.filter(
-                Q(status='published') | Q(author=self.request.user)
+                Q(status='published') |
+                Q(author=self.request.user) |
+                (Q(status='draft') & Q(author__userType='admin'))
             ).order_by('-created_at')
         else:
             return queryset.filter(status='published').order_by('-created_at')

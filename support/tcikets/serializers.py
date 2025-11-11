@@ -386,6 +386,33 @@ class InterventionCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'updated_at', 'total_cost')
 
 
+class InterventionImageSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(read_only=True)
+    image_url = serializers.ReadOnlyField()
+    thumbnail_url = serializers.ReadOnlyField()
+    medium_url = serializers.ReadOnlyField()
+    large_url = serializers.ReadOnlyField()
+    webp_url = serializers.ReadOnlyField()
+    responsive_urls = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InterventionImage
+        fields = [
+            'id', 'image', 'image_url', 'thumbnail_url', 'medium_url',
+            'large_url', 'webp_url', 'responsive_urls', 'caption', 'alt_text',
+            'width', 'height', 'file_size', 'uploaded_at', 'order'
+        ]
+        read_only_fields = ['uploaded_at', 'width', 'height', 'file_size']
+
+    def get_responsive_urls(self, obj):
+        return obj.get_responsive_urls()
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Renvoie l’URL medium à la place du path brut
+        rep['image'] = instance.medium_url
+        return rep
+
 class TechnicianRatingSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.user.get_full_name', read_only=True)
     
@@ -422,28 +449,25 @@ class ProcedureTagSerializer(serializers.ModelSerializer):
         model = ProcedureTag
         fields = ['id', 'name', 'slug']
         read_only_fields = ['slug']
+        
 class ProcedureImageSerializer(serializers.ModelSerializer):
     # URLs avec transformations
     thumbnail_url = serializers.ReadOnlyField()
     medium_url = serializers.ReadOnlyField()
     large_url = serializers.ReadOnlyField()
     webp_url = serializers.ReadOnlyField()
-    responsive_urls = serializers.SerializerMethodField()
     
     class Meta:
         model = ProcedureImage
         fields = [
             'id', 'procedure', 'image', 'image_url',
             'thumbnail_url', 'medium_url', 'large_url', 'webp_url',
-            'responsive_urls',
             'caption', 'alt_text', 'width', 'height'
             , 'uploaded_at', 'order'
         ]
         read_only_fields = ['uploaded_at', 'width', 'height']
     
-    def get_responsive_urls(self, obj):
-        """Retourne toutes les tailles disponibles"""
-        return obj.get_responsive_urls()
+
 
 
 class ProcedureAttachmentSerializer(serializers.ModelSerializer):
