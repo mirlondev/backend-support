@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import UserSerializer, UserUpdateSerializer, ClientCreateSerializer,TechnicianCreateSerializer
+from .serializers import UserSerializer, UserUpdateSerializer, MeSerializer, ClientCreateSerializer,TechnicianCreateSerializer
 from django.contrib.auth import get_user_model
 from .models import Client, Technician
 import uuid
@@ -216,10 +216,11 @@ class RefreshTokenView(generics.GenericAPIView):
         except Exception as e:
             return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
-# Vue générique pour le profil utilisateur
+
+
 class MeView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = UserUpdateSerializer
-    
+    serializer_class = MeSerializer     # <-- ici
+
     def get_object(self):
         return self.request.user

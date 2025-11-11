@@ -10,7 +10,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 
-SECRET_KEY = 'django-insecure-y1i50d+0$5#g8@!7h5-ssq%rbegehj#48x3$m8913s20=p*j6b'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -30,11 +29,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'channels',
-    'tcikets',
-    'django_notifications',
+    'channels',  
    'django_ckeditor_5',
-    'whitenoise',
+    "whitenoise",
+    "cloudinary",           # 1
+    "cloudinary_storage",   # 2  <--  avant tcikets
+    "tcikets",
 ]
 
 MIDDLEWARE = [
@@ -181,7 +181,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
-
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 FILE_UPLOAD_PERMISSIONS = 0o644
@@ -189,11 +196,9 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 # ================================
 # CKEditor 5 Config
 
-TWILIO_ACCOUNT_SID = 'snkjjjjjjjjjjjjjjjjj'
-TWILIO_AUTH_TOKEN = 'jnksssssssssssss'
-TWILIO_WHATSAPP_NUMBER = '+12658899988888'
+
 # ================================
-# CKEditor 5 Config
+# CKEditor 5 Config988
 # ================================
 customColorPalette = [
         {
@@ -225,7 +230,7 @@ customColorPalette = [
   #CKEDITOR_5_CUSTOM_CSS = 'path_to.css' # optional
 # ================================
 CKEDITOR_5_UPLOAD_PATH = "uploads/"
-CKEDITOR_5_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+CKEDITOR_5_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': {

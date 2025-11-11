@@ -1,11 +1,13 @@
 # signals.py
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
-from .models import Ticket, Notification
+from .models import Ticket, Notification, Client, Technician
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
-
+from django.db import transaction
+from django.db.models.signals import pre_save, post_save
+from django.conf import settings
 @receiver(user_logged_in)
 def create_login_notifications(sender, request, user, **kwargs):
     if user.userType == 'admin':
@@ -74,3 +76,33 @@ def handle_ticket_notifications(sender, instance, created, **kwargs):
                 ticket=instance,
                 is_read=False
             )
+            
+            
+# models.py  (ou un fichier signals.py importé dans ready())
+
+
+
+User = settings.AUTH_USER_MODEL   # ou from .models import User
+@receiver(pre_save, sender=User)
+def set_user_type(sender, instance, **kwargs):
+    """Affecte automatiquement userType pour les nouveaux super-utilisateurs."""
+    if instance.pk is None and instance.is_superuser:
+        instance.userType = 'admin'
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Crée le profil Client ou Technician après la création de l'utilisateur."""
+    if not created:
+        return
+
+    with transaction.atomic():
+        if instance.userType == 'client':
+            Client.objects.get_or_create(user=instance)
+        elif instance.userType == 'technician':
+            Technician.objects.get_or_create(user=instance)
+
+@receiver(pre_save, sender=User)
+def force_admin_usertype(sender, instance, **kwargs):
+    if instance.is_superuser:
+        instance.userType = 'admin'
