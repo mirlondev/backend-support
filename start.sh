@@ -2,7 +2,21 @@
 
 # Donner les permissions d'exécution au script dans support/
 bash support/start.sh
-python manage.py migrate
+#!/bin/bash
 
+# Donner les permissions d'exécution au script dans support/
+
+
+#!/bin/bash
+
+# Aller dans le bon répertoire
+cd /support
+
+# Collecter les fichiers statiques
 python manage.py collectstatic --noinput
-gunicorn support.wsgi:application --bind 0.0.0.0:$PORT
+
+# Appliquer les migrations
+python manage.py migrate --noinput
+
+# Démarrer Gunicorn
+gunicorn support.wsgi:application --bind 0.0.0.0:8000 --workers 4
