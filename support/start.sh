@@ -14,6 +14,7 @@ python manage.py collectstatic --noinput
 
 # Appliquer les migrations
 python manage.py migrate --noinput
+cd /support/support
 
 # Démarrer Gunicorn
-gunicorn support.wsgi:application --bind 0.0.0.0:8000 --workers 4
+gunicorn support.support.wsgi:application --bind 0.0.0.0:8000 --workers 4
