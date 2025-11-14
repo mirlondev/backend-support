@@ -2,7 +2,7 @@
 import os
 import django
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "support.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings.production")
 django.setup()  # ⚠️ Initialise les apps
 
 from django.core.asgi import get_asgi_application
