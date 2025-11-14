@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError, PermissionDenied
 
-from support.utils.whatsapp_service import WhatsAppService, notify_ticket_created, notify_ticket_assigned
+#from support.utils.whatsapp_service import WhatsAppService, notify_ticket_created, notify_ticket_assigned
 from support.utils.export_utils import export_ticket_pdf, export_tickets_excel
 from support.utils.report_utils import export_intervention_pdf, export_monthly_report_excel
 from support.utils.pdf_utils import intervention_to_pdf_buffer
@@ -37,9 +37,12 @@ from .serializers import (
     UserSerializer, TechnicianRatingSerializer,
     ClientRatingSerializer, MessageSerializer
 )
+from support.utils.whatsapp_service import WhatsAppService
+import logging
 
 logger = logging.getLogger(__name__)
-whatsapp_service = WhatsAppService()
+
+#whatsapp_service = WhatsAppService()
 
 # Fonctions helper manquantes
 def get_user_profile(user):
@@ -126,11 +129,7 @@ class TicketListCreateView(ListCreateAPIView):
                 ticket = serializer.save(client=client)
                 
                 # 🔥 NOTIFICATION CRÉATION TICKET AVEC TWILIO
-                try:
-                    notify_ticket_created(ticket)
-                except Exception as e:
-                    logger.error(f"Erreur notification création ticket {ticket.id}: {str(e)}")
-
+                
             except Client.DoesNotExist:
                 raise ValidationError("Client profile not found")
 
@@ -927,129 +926,36 @@ def create_message(request):
         logger.error(f"Erreur dans create_message: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ---------- Vérification config ----------
-
-
-# ---------- Historique messages ----------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def ticket_whatsapp_messages(request, ticket_id):
-    """Récupère l'historique WhatsApp d'un ticket"""
-    ticket = get_object_or_404(Ticket, id=ticket_id)
-    user = request.user
-
-    if not (user.userType == 'admin' or
-            (user.userType == 'client' and getattr(user, 'client_profile', None) == ticket.client) or
-            (user.userType == 'technician' and getattr(user, 'technician_profile', None) == ticket.technician)):
-        return Response({'error': 'Permission denied'}, status=403)
-
-    messages = Message.objects.filter(ticket=ticket, is_whatsapp=True).order_by('timestamp')
-    serializer = MessageSerializer(messages, many=True, context={'request': request})
-    return Response(serializer.data)
-
-# ---------- Webhook ----------
 @csrf_exempt
 def whatsapp_webhook(request):
-    """Webhook pour réponses WhatsApp"""
     if request.method != 'POST':
         return HttpResponse(status=405)
 
     from_number = request.POST.get('From', '').replace('whatsapp:', '')
-    message_body = request.POST.get('Body', '').strip().lower()
-    logger.info(f"Message reçu de {from_number}: {message_body}")
+    message_body = request.POST.get('Body', '').strip()
+    media_url = request.POST.get('MediaUrl0', None)
 
-    try:
-        confirmation = PendingConfirmation.objects.filter(
-            phone_number=from_number,
-            expires_at__gt=timezone.now()
-        ).latest('created_at')
+    logger.info(f"WhatsApp reçu de {from_number}: {message_body}")
 
-        intervention = confirmation.intervention
+    # Trouve le ticket en cours pour ce numéro
+    ticket = (
+        Ticket.objects.filter(client__user__phone=from_number, status__in=['open', 'in_progress']).last()
+        or
+        Ticket.objects.filter(technician__user__phone=from_number, status__in=['open', 'in_progress']).last()
+    )
 
-        if message_body in ['oui', 'yes', 'ok']:
-            intervention.status = 'in_progress'
-            intervention.save()
-            whatsapp_service.send_message(from_number, "✅ Confirmation reçue, intervention commencera bientôt.")
-        elif message_body in ['non', 'no', 'cancel']:
-            intervention.status = 'cancelled'
-            intervention.save()
-            whatsapp_service.send_message(from_number, "❌ Intervention annulée comme demandé.")
+    if not ticket:
+        logger.warning("Aucun ticket trouvé pour ce numéro")
+        return HttpResponse(status=200)
 
-        confirmation.delete()
-
-    except PendingConfirmation.DoesNotExist:
-        logger.info(f"Aucune confirmation en attente pour {from_number}")
-        whatsapp_service.send_message(from_number, "Pas de demande en attente. Contactez le support.")
+    # Enregistre le message
+    Message.objects.create(
+        ticket=ticket,
+        user=None,  # message reçu = pas d’auteur local
+        content=message_body,
+        image=media_url,
+        is_whatsapp=True,
+        whatsapp_status='delivered',
+    )
 
     return HttpResponse(status=200)
-
-# ---------- Helper DRY pour envoi ----------
-def _send_whatsapp(ticket, recipient, content, user, request, send_func, recipient_label):
-    if not content:
-        return Response({'error': 'Le message ne peut pas être vide'}, status=400)
-    if not recipient or not getattr(recipient, 'phone', None):
-        return Response({'error': f"Aucun {recipient_label} avec un numéro de téléphone"}, status=400)
-
-    try:
-        message_sid = send_func(whatsapp_service, ticket, content, user)
-    except Exception as e:
-        logger.error(f"Erreur envoi WhatsApp: {e}")
-        return Response({'error': f'Erreur lors de l\'envoi: {e}'}, status=500)
-
-    if not message_sid:
-        return Response({'error': f'Échec de l\'envoi au {recipient_label}'}, status=500)
-
-    try:
-        message = Message.objects.get(whatsapp_sid=message_sid)
-        serializer = MessageSerializer(message, context={'request': request})
-        data = serializer.data
-    except Message.DoesNotExist:
-        data = {}
-        logger.warning(f"Message envoyé mais non trouvé en DB, SID={message_sid}")
-
-    return Response({
-        'status': 'success',
-        'message': f'Message envoyé au {recipient_label} avec succès',
-        'data': data,
-        'whatsapp_sid': message_sid
-    }, status=200)
-
-# ---------- Envoi au client ----------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def send_to_client(request, ticket_id):
-    ticket = get_object_or_404(Ticket, id=ticket_id)
-    user = request.user
-    if user.userType not in ['admin', 'technician']:
-        return Response({'error': 'Seuls admins/techniciens peuvent envoyer'}, status=403)
-
-    content = request.data.get('content', '').strip()
-    return _send_whatsapp(
-        ticket=ticket,
-        recipient=ticket.client,
-        content=content,
-        user=user,
-        request=request,
-        send_func=lambda svc, t, c, u: svc.send_to_client(ticket=t, message_body=c, user=u),
-        recipient_label="client"
-    )
-
-# ---------- Envoi au technicien ----------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def send_to_technician(request, ticket_id):
-    ticket = get_object_or_404(Ticket, id=ticket_id)
-    user = request.user
-    if user.userType not in ['admin', 'technician']:
-        return Response({'error': 'Seuls admins/techniciens peuvent envoyer'}, status=403)
-
-    content = request.data.get('content', '').strip()
-    return _send_whatsapp(
-        ticket=ticket,
-        recipient=ticket.technician,
-        content=content,
-        user=user,
-        request=request,
-        send_func=lambda svc, t, c, u: svc.send_to_technician(ticket=t, message_body=c, user=u),
-        recipient_label="technicien"
-    )

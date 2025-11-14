@@ -8,6 +8,36 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models.signals import pre_save, post_save
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from support.utils.whatsapp_service import WhatsAppService
+from django.db.models import Q
+
+
+from support.utils.callmebot import send_whatsapp_free
+import os
+
+User = get_user_model()
+CMB_KEY = os.getenv("CALLMEBOT_APIKEY")   # à ajouter dans .env
+
+@receiver(post_save, sender=Ticket)
+def notify_admins_callmebot(sender, instance, created, **kwargs):
+    if not created or not CMB_KEY:
+        return
+
+    admins = User.objects.filter(
+        Q(userType='admin') | Q(is_staff=True)
+    ).exclude(phone__isnull=True).exclude(phone='')
+
+    msg = (
+        f"🔔 *Nouveau ticket* {instance.code}\n"
+        f"Titre : {instance.title}\n"
+        f"Client : {instance.client.user.get_full_name()}\n"
+        f"https://ton-site.com/admin/ticket/{instance.id}/change/"
+    )[:500]  # limite 500 car
+
+    for admin in admins:
+        send_whatsapp_free(admin.phone, msg, CMB_KEY)
+
 @receiver(user_logged_in)
 def create_login_notifications(sender, request, user, **kwargs):
     if user.userType == 'admin':
@@ -106,3 +136,26 @@ def create_user_profile(sender, instance, created, **kwargs):
 def force_admin_usertype(sender, instance, **kwargs):
     if instance.is_superuser:
         instance.userType = 'admin'
+        
+
+
+User = get_user_model()
+whatsapp = WhatsAppService()
+
+@receiver(post_save, sender=Ticket)
+def notify_admins_on_ticket_creation(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    admins = User.objects.filter(
+        Q(userType='admin') | Q(is_staff=True)
+    ).exclude(phone__isnull=True).exclude(phone='')
+
+    msg = (
+        f"🔔 Nouveau ticket *{instance.code}*\n"
+        f"Titre : {instance.title}\n"
+        f"Client : {instance.client.user.get_full_name()}"
+    )
+
+    for admin in admins:
+        whatsapp.send_message(admin.phone, msg)

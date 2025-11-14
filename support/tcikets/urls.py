@@ -9,8 +9,8 @@ from .search_views import (
     UserSearchView
 )
 urlpatterns = [
-    path('whatsapp/webhook/', views.whatsapp_webhook),
-
+  path(
+      'api/whatsapp/webhook/', views.whatsapp_webhook, name='whatsapp_webhook'),
     # Clients
     path('clients/', extend_views.ClientViewSet.as_view({'get': 'list'}), name='client-list'),
     path('clients/<uuid:pk>/', views.ClientRetrieveUpdateDestroyView.as_view(), name='client-detail'),
@@ -70,8 +70,6 @@ urlpatterns = [
     path('notifications/mark-all-read/', extend_views.mark_all_notifications_read, name='mark-all-read'),
     path('notifications/stats/', extend_views.NotificationStatsView.as_view(), name='notification-stats'),
     
-    path('tickets/<uuid:ticket_id>/send-to-client/', views.send_to_client, name='send_to_client'),
-    path('tickets/<uuid:ticket_id>/send-to-technician/', views.send_to_technician, name='send_to_technician'),
     
     
  #  path('notifications/', extend_views.NotificationListView.as_view(), name='notification-list'),

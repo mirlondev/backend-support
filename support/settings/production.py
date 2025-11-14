@@ -56,10 +56,9 @@ CLOUDINARY_STORAGE = {
 # Variables sensibles (à mettre dans Render)
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID"),
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN"), 
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")   # ✅ sans virgule
+TWILIO_AUTH_TOKEN  = os.environ.get("TWILIO_AUTH_TOKEN")    # ✅ sans virgule
 TWILIO_WHATSAPP_NUMBER = os.environ.get("TWILIO_WHATSAPP_NUMBER")
-
 # settings/production.py
 LOGGING = {
     'version': 1,
