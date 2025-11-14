@@ -11,7 +11,7 @@ cd /support
 
 # Collecter les fichiers statiques
 python manage.py collectstatic --noinput
-
+export DJANGO_SETTINGS_MODULE="settings.production"
 # Appliquer les migrations
 python manage.py migrate --noinput
 cd /support/support
