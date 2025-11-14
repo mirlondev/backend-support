@@ -14,7 +14,16 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = False
 
 # IMPORTANT POUR RAILWAY
-ALLOWED_HOSTS = ["*", "backend-support-production.up.railway.app"]
+ALLOWED_HOSTS = [
+    "backend-support-production.up.railway.app",
+    ".railway.app",
+    "localhost",
+    "127.0.0.1",
+]
+CSRF_TRUSTED_ORIGINS = [
+    "https://backend-support-production.up.railway.app",
+    "https://*.railway.app",
+]
 
 # ------------------------------------------------------------------
 # DATABASE
