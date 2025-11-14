@@ -1,20 +1,32 @@
 #!/bin/bash
 
-# Donner les permissions d'exécution au script dans support/
-chmod +x support/start.sh
+# Se positionner dans le répertoire support où se trouve manage.py
+cd /app/support
 
-
-#!/bin/bash
-
-# Aller dans le bon répertoire
-cd /support
+echo "=== Django Deployment Info ==="
+echo "Current directory: $(pwd)"
+echo "Python version: $(python --version)"
+echo "Directory structure:"
+ls -la
+echo "=============================="
 
 # Collecter les fichiers statiques
-python manage.py collectstatic --noinput
-export DJANGO_SETTINGS_MODULE="settings.production"
+echo "📦 Collecting static files..."
+python manage.py collectstatic --noinput --clear
+
 # Appliquer les migrations
+echo "🗄️  Running database migrations..."
 python manage.py migrate --noinput
-cd /support/support
 
 # Démarrer Gunicorn
-gunicorn support.support.wsgi:application --bind 0.0.0.0:8000 --workers 4
+echo "🚀 Starting Gunicorn server..."
+exec gunicorn support.wsgi:application \
+    --bind 0.0.0.0:${PORT:-8080} \
+    --workers 4 \
+    --worker-class sync \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info \
+    --capture-output \
+    --enable-stdio-inheritance
