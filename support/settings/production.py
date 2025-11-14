@@ -34,7 +34,11 @@ DATABASES = {
 # ------------------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
+# OU créer conditionnellement
+STATICFILES_DIRS = []
+static_dir = os.path.join(BASE_DIR, 'static')
+if os.path.exists(static_dir):
+    STATICFILES_DIRS.append(static_dir)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

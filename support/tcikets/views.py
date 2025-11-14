@@ -1,4 +1,3 @@
-
 import logging
 import uuid
 import calendar
@@ -20,10 +19,11 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError, PermissionDenied
 
-#from support.utils.whatsapp_service import WhatsAppService, notify_ticket_created, notify_ticket_assigned
-from support.utils.export_utils import export_ticket_pdf, export_tickets_excel
-from support.utils.report_utils import export_intervention_pdf, export_monthly_report_excel
-from support.utils.pdf_utils import intervention_to_pdf_buffer
+# SUPPRIMER les imports suivants :
+# from support.utils.export_utils import export_ticket_pdf, export_tickets_excel
+# from support.utils.report_utils import export_intervention_pdf, export_monthly_report_excel
+# from support.utils.pdf_utils import intervention_to_pdf_buffer
+
 from .permissions import IsAdminOrOwner
 from .models import (
     User, Client, Technician, Ticket, Intervention, TicketImage, TechnicianRating, ClientRating,
@@ -38,7 +38,6 @@ from .serializers import (
     ClientRatingSerializer, MessageSerializer
 )
 from support.utils.whatsapp_service import WhatsAppService
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +64,11 @@ def check_ticket_permission(user, ticket):
 
 def generate_intervention_pdf(intervention):
     """Generate PDF for intervention - placeholder function"""
-    # Cette fonction doit être implémentée dans vos utils
     try:
         from support.utils.pdf_utils import intervention_to_pdf_buffer
         buffer = intervention_to_pdf_buffer(intervention)
-        # Retourner l'URL ou le chemin du PDF généré
         return f"/media/interventions/{intervention.id}.pdf"
-    except Exception as e:
+    except (ImportError, OSError) as e:
         logger.error(f"Erreur génération PDF intervention: {str(e)}")
         return None
 
@@ -530,6 +527,7 @@ class CanRateClientView(APIView):
         
         return Response({'can_rate': has_worked_together, 'reason': ''})
 
+
 class ExportTicketPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -547,20 +545,35 @@ class ExportTicketPDFView(APIView):
             return HttpResponse("No tickets found", status=404)
 
         if file_format == 'pdf':
-            ticket = tickets.first()
-            buffer = export_ticket_pdf(ticket)
-            response = HttpResponse(buffer, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="ticket_{ticket.id}.pdf"'
-            return response
+            try:
+                # Import lazy
+                from support.utils.export_utils import export_ticket_pdf
+                
+                ticket = tickets.first()
+                buffer = export_ticket_pdf(ticket)
+                response = HttpResponse(buffer, content_type='application/pdf')
+                response['Content-Disposition'] = f'attachment; filename="ticket_{ticket.id}.pdf"'
+                return response
+            except (ImportError, OSError) as e:
+                return HttpResponse(
+                    f"Export PDF non disponible: {str(e)}. Installez les dépendances système.",
+                    status=503
+                )
 
         elif file_format in ["xls", "xlsx", "excel"]:
-            buffer = export_tickets_excel(tickets)
-            response = HttpResponse(
-                buffer,
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = 'attachment; filename="tickets_report.xlsx"'
-            return response
+            try:
+                # Import lazy
+                from support.utils.export_utils import export_tickets_excel
+                
+                buffer = export_tickets_excel(tickets)
+                response = HttpResponse(
+                    buffer,
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = 'attachment; filename="tickets_report.xlsx"'
+                return response
+            except (ImportError, OSError) as e:
+                return HttpResponse(f"Export Excel échoué: {str(e)}", status=500)
 
         else:
             return HttpResponse("Invalid file format", status=400)
@@ -576,10 +589,21 @@ class InterventionPDFReportView(APIView):
 
         self.check_object_permissions(request, intervention)
 
-        buffer = export_intervention_pdf(intervention)
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="intervention_report_{intervention.id}.pdf"'
-        return response
+        try:
+            # Import lazy
+            from support.utils.report_utils import export_intervention_pdf
+            
+            buffer = export_intervention_pdf(intervention)
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="intervention_report_{intervention.id}.pdf"'
+            return response
+        except (ImportError, OSError) as e:
+            return HttpResponse(
+                f"Export PDF non disponible: {str(e)}",
+                status=503
+            )
+
+
 
 class MonthlyReportExcelView(APIView):
     permission_classes = [IsAuthenticated]
@@ -631,6 +655,9 @@ class MonthlyReportExcelView(APIView):
             )
         
         try:
+            # Import lazy
+            from support.utils.report_utils import export_monthly_report_excel
+            
             buffer = export_monthly_report_excel(interventions, month, year)
         except Exception as e:
             return Response(
@@ -652,13 +679,18 @@ class MonthlyReportExcelView(APIView):
 def download_intervention_report(request, intervention_id):
     intervention = get_object_or_404(Intervention, id=intervention_id)
     
-    pdf_buffer = intervention_to_pdf_buffer(intervention)
-    
-    response = HttpResponse(pdf_buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="intervention_report_{intervention_id}.pdf"'
-    
-    return response
-
+    try:
+        # Import lazy
+        from support.utils.pdf_utils import intervention_to_pdf_buffer
+        
+        pdf_buffer = intervention_to_pdf_buffer(intervention)
+        
+        response = HttpResponse(pdf_buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="intervention_report_{intervention_id}.pdf"'
+        
+        return response
+    except (ImportError, OSError) as e:
+        return HttpResponse(f"PDF generation failed: {str(e)}", status=503)
 # WhatsApp Views
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
