@@ -2,7 +2,7 @@ import os, re, mimetypes
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils.timesince import timesince
-from django.utils.timezone import timezone
+from django.utils import timezone
 
 from cloudinary import CloudinaryImage
 from .models import (
