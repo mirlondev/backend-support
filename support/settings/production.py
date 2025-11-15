@@ -107,9 +107,10 @@ MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 # CORS : autoriser ton frontend React
 # ------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
-    "*",
+    "https://regal-support.netlify.app"
 ]
 APPEND_SLASH = True
+SECURE_SSL_REDIRECT = False
 
 # ------------------------------------------------------------------
 # CLOUDINARY
@@ -169,3 +170,12 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('GMAIL_USER')
 EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')  
+
+
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+CSP_IMG_SRC = ("'self'", "data:", "https:")
+CSP_CONNECT_SRC = ("'self'", "https://backend-support-production.up.railway.app")
+
+
