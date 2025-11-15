@@ -1,3 +1,4 @@
+from django.db.models import Prefetch, Count, Q, F
 import logging
 import uuid
 import calendar
@@ -6,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.core.cache import cache
 
 from rest_framework import permissions, status, serializers
 from rest_framework.permissions import IsAuthenticated
@@ -90,64 +92,73 @@ class TechnicianRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
             return TechnicianCreateSerializer
         return TechnicianSerializer
 
+# ---------- TICKETS ----------
 class TicketListCreateView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
+        cache_key = f"tickets_user_{user.id}_{user.userType}_ids"
+        cached_ids = cache.get(cache_key)
+        if cached_ids is not None:
+            return Ticket.objects.filter(id__in=cached_ids).select_related(
+                'client__user', 'technician__user'
+            ).prefetch_related(
+                Prefetch('images', queryset=TicketImage.objects.only('id', 'image', 'ticket_id')),
+                Prefetch('interventions', queryset=Intervention.objects.select_related(
+                    'technician__user'
+                ).only('id', 'ticket_id', 'status', 'intervention_date', 'technician_id'))
+            )
+
+        base_qs = Ticket.objects.select_related(
+            'client__user', 'technician__user'
+        ).prefetch_related(
+            Prefetch('images', queryset=TicketImage.objects.only('id', 'image', 'ticket_id')),
+            Prefetch('interventions', queryset=Intervention.objects.select_related(
+                'technician__user'
+            ).only('id', 'ticket_id', 'status', 'intervention_date', 'technician_id'))
+        )
+
         if user.userType == "client":
             try:
                 profile = Client.objects.get(user=user)
-                return Ticket.objects.filter(client=profile)
+                qs = base_qs.filter(client=profile)
             except Client.DoesNotExist:
-                return Ticket.objects.none()
+                qs = Ticket.objects.none()
         elif user.userType == "technician":
             try:
                 profile = Technician.objects.get(user=user)
-                return Ticket.objects.filter(technician=profile)
+                qs = base_qs.filter(technician=profile)
             except Technician.DoesNotExist:
-                return Ticket.objects.none()
-        return Ticket.objects.all()
+                qs = Ticket.objects.none()
+        else:
+            qs = base_qs
+
+        ids = list(qs.values_list('id', flat=True))
+        cache.set(cache_key, ids, 300)
+        return qs
 
     def get_serializer_class(self):
-        if self.request.method == "POST":
-            return TicketCreateSerializer
-        return TicketSerializer
-    
+        return TicketCreateSerializer if self.request.method == "POST" else TicketSerializer
+
     def perform_create(self, serializer):
         user = self.request.user
-
         if user.userType == "client":
-            try:
-                client = Client.objects.get(user=user)
-                if not client:
-                    raise ValidationError("User is not associated with a client profile")
-
-                ticket = serializer.save(client=client)
-                
-                # 🔥 NOTIFICATION CRÉATION TICKET AVEC TWILIO
-                
-            except Client.DoesNotExist:
-                raise ValidationError("Client profile not found")
-
+            client = Client.objects.get(user=user)
+            ticket = serializer.save(client=client)
         elif user.userType == "admin":
             client_id = self.request.data.get("client_id")
             if not client_id:
                 raise ValidationError("Admin must specify a client for the ticket")
-            
             client = get_object_or_404(Client, id=client_id)
             ticket = serializer.save(client=client)
-            
-            # 🔥 NOTIFICATION CRÉATION TICKET AVEC TWILIO
-            try:
-                notify_ticket_created(ticket)
-            except Exception as e:
-                logger.error(f"Erreur notification création ticket {ticket.id}: {str(e)}")
-
         else:
             raise ValidationError("Only clients or admins can create tickets")
 
+        cache_key = f"tickets_user_{user.id}_{user.userType}_ids"
+        cache.delete(cache_key)
         return ticket
+
 
 class TicketRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -254,20 +265,35 @@ class InterventionListView(ListCreateAPIView):
     serializer_class = InterventionSerializer
 
     def get_queryset(self):
-        queryset = Intervention.objects.all()
         ticket_id = self.request.query_params.get('ticket')
+        cache_key = f"interventions_ticket_{ticket_id or 'all'}"
+
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
+
+        queryset = Intervention.objects.select_related(
+            'ticket__client__user', 'ticket__technician__user', 'technician__user'
+        ).prefetch_related('images', 'materials', 'expenses')
+
         if ticket_id:
             queryset = queryset.filter(ticket_id=ticket_id)
-        return queryset
 
+        cache.set(cache_key, queryset, 300)
+        return queryset
+    
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return InterventionCreateSerializer
         return InterventionSerializer
             
     def perform_create(self, serializer):
-        intervention = serializer.save()
-        return intervention
+        intervention = super().perform_create(serializer)
+        # Invalider le cache lié
+        ticket_id = str(intervention.ticket.id)
+        cache.delete(f"interventions_ticket_{ticket_id}")
+        cache.delete(f"interventions_ticket_all")
+        return interventio
 
 class InterventionRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -306,24 +332,36 @@ class InterventionByTicketView(ListAPIView):
 
 class UserListView(ListCreateAPIView):
     permission_classes = [IsAuthenticated]
-    queryset = User.objects.all()
     serializer_class = UserSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.userType == 'admin' or user.is_staff:
-            return User.objects.all()
-        return User.objects.filter(id=user.id)
+        cache_key = f"users_list_{user.id}_{user.userType}"
+
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
+
+        queryset = User.objects.only(
+            'id', 'username', 'first_name', 'last_name',
+            'email', 'userType', 'phone', 'avatar'
+        )
+
+        if user.userType not in ['admin', 'staff']:
+            queryset = queryset.filter(id=user.id)
+
+        cache.set(cache_key, queryset, 300)
+        return queryset
 
     def post(self, request, *args, **kwargs):
-        user = request.user
-        if user.userType != 'admin' and not user.is_staff:
-            return Response(
-                {'error': 'Not allowed to create a user'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().post(request, *args, **kwargs)
-
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 201:
+            # Invalider le cache après création
+            user = request.user
+            cache.delete(f"users_list_{user.id}_{user.userType}")
+        return response
+    
+    
 class UserDetailView(RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     queryset = User.objects.all()

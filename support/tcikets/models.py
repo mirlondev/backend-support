@@ -225,6 +225,7 @@ class Procedure(models.Model):
     featured = models.BooleanField(default=False, db_index=True)
     tags = models.ManyToManyField(ProcedureTag, related_name='procedures', blank=True)
     related_procedures = models.ManyToManyField('self', symmetrical=True, blank=True)
+    
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -254,6 +255,13 @@ class Procedure(models.Model):
         return self.title
 
     class Meta:
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['category', 'status']),
+            models.Index(fields=['author', 'status']),
+            models.Index(fields=['-views']),
+            models.Index(fields=['featured', 'status']),
+        ]
         ordering = ['-created_at']
 
 class ProcedureImage(models.Model):
@@ -395,6 +403,15 @@ class Ticket(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.status})"
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['client', 'status']),
+            models.Index(fields=['technician', 'status']),
+            models.Index(fields=['-created_at']),
+        ]
+        ordering = ['-created_at']
 
 
 
@@ -654,9 +671,12 @@ class Intervention(models.Model):
         return status_colors.get(self.status, 'gray')
     
     class Meta:
+        indexes = [
+            models.Index(fields=['ticket', '-intervention_date']),
+            models.Index(fields=['technician', 'status']),
+            models.Index(fields=['status', '-intervention_date']),
+        ]
         ordering = ['-intervention_date', '-created_at']
-        verbose_name = "Intervention"
-        verbose_name_plural = "Interventions"
     
     
 
@@ -829,6 +849,10 @@ class Message(models.Model):
     is_whatsapp = models.BooleanField(default=False)  # Si le message a été envoyé via WhatsApp
 
     class Meta:
+        indexes = [
+            models.Index(fields=['ticket', 'timestamp']),
+            models.Index(fields=['user', '-timestamp']),
+        ]
         ordering = ['timestamp']
 
     def __str__(self):

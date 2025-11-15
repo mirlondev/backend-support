@@ -22,7 +22,7 @@ python manage.py migrate --noinput
 echo "🚀 Starting Gunicorn server..."
 exec gunicorn support.wsgi:application \
     --bind 0.0.0.0:${PORT:-8080} \
-    --workers 4 \
+    --workers 2 \
     --worker-class sync \
     --timeout 120 \
     --access-logfile - \

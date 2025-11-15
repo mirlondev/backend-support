@@ -58,3 +58,6 @@ whitenoise==6.11.0
 yarl==1.22.0
 zopfli==0.4.0
 gunicorn
+django-redis>=5.4.0
+redis>=5.0.0
+hiredis>=2.3.2

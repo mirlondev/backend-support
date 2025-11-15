@@ -2,6 +2,7 @@ from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.generics import ListCreateAPIView
+from django.db.models import Prefetch, Count, Q, F
 from .models import User
 from .models import Client, Technician, Ticket, Intervention,Procedure,Notification,ProcedureImage,ProcedureInteraction
 from .serializers import (
@@ -15,6 +16,7 @@ from .serializers import (
 
 )
 from django.db.models import Q
+from django.core.cache import cache
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -63,19 +65,54 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 class TicketViewSet(viewsets.ModelViewSet):
-    queryset = Ticket.objects.all()
-    serializer_class = TicketSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return TicketCreateSerializer
+        return TicketSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.userType == 'client':
-            return Ticket.objects.filter(client__user=user)
-        elif user.userType == 'technician':
-            return Ticket.objects.filter(technician__user=user)
-        return Ticket.objects.all()
+        cache_key = f"tickets_user_{user.id}_{getattr(user, 'userType', 'admin')}"
 
-    # ---------- Action messages ----------
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
+
+        base_queryset = Ticket.objects.select_related(
+            'client__user', 'technician__user'
+        ).prefetch_related(
+            'images',
+            'interventions__technician__user',
+            'messages__user'
+        )
+
+        if getattr(user, 'userType', 'admin') == 'admin' or user.is_staff:
+            qs = base_queryset.all()
+        else:
+            try:
+                client = Client.objects.get(user=user)
+                qs = base_queryset.filter(client=client)
+            except Client.DoesNotExist:
+                try:
+                    technician = Technician.objects.get(user=user)
+                    qs = base_queryset.filter(technician=technician)
+                except Technician.DoesNotExist:
+                    qs = Ticket.objects.none()
+
+        cache.set(cache_key, qs, 300)  # 5 min
+        return qs
+
+    def perform_create(self, serializer):
+        ticket = serializer.save()
+        # Invalider le cache
+        user = self.request.user
+        cache_key = f"tickets_user_{user.id}_{getattr(user, 'userType', 'admin')}"
+        cache.delete(cache_key)
+        return ticket
+    
+    
     @action(detail=True, methods=['get', 'post'])
     def messages(self, request, pk=None):
         ticket = get_object_or_404(Ticket, pk=pk)
@@ -116,20 +153,38 @@ class TicketViewSet(viewsets.ModelViewSet):
 
 class ProcedureListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    queryset = Procedure.objects.filter(is_active=True)
     serializer_class = ProcedureSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        cache_key = f"procedures_list_{self.request.user.id}_{self.request.user.is_authenticated}"
+
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
+
+        queryset = Procedure.objects.filter(is_active=True).select_related(
+            'author'
+        ).prefetch_related(
+            'tags',
+            Prefetch('images', queryset=ProcedureImage.objects.order_by('order')),
+            'attachments'
+        ).annotate(
+            images_count=Count('images'),
+            attachments_count=Count('attachments')
+        )
 
         if self.request.user.is_authenticated:
-            return queryset.filter(
+            qs = queryset.filter(
                 Q(status='published') |
                 Q(author=self.request.user) |
                 (Q(status='draft') & Q(author__userType='admin'))
             ).order_by('-created_at')
         else:
-            return queryset.filter(status='published').order_by('-created_at')
+            qs = queryset.filter(status='published').order_by('-created_at')
+
+        cache.set(cache_key, qs, 300)
+        return qs
+
 
     def perform_create(self, serializer):
         procedure = serializer.save(author=self.request.user)
@@ -144,18 +199,31 @@ class ProcedureListCreateView(generics.ListCreateAPIView):
                     image.save()
                 except ProcedureImage.DoesNotExist:
                     continue
+                cache.delete(f"procedures_list_{self.request.user.id}_{self.request.user.is_authenticated}")
+        return procedure
 
 class ProcedureRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    queryset = Procedure.objects.all()
     serializer_class = ProcedureSerializer
+
+    def get_queryset(self):
+        # OPTIMISATION : charger toutes les relations
+        return Procedure.objects.select_related(
+            'author'
+        ).prefetch_related(
+            'tags',
+            'images',
+            'attachments',
+            'related_procedures__author',
+            'related_procedures__tags'
+        )
 
     def get_object(self):
         obj = super().get_object()
-        # Increment view count only for GET requests
+        # Incrémenter les vues de manière efficace
         if self.request.method == 'GET':
-            obj.views += 1
-            obj.save(update_fields=['views'])
+            Procedure.objects.filter(pk=obj.pk).update(views=F('views') + 1)
+            obj.refresh_from_db()
         return obj
 
     def update(self, request, *args, **kwargs):
@@ -565,58 +633,6 @@ class ProcedureTagListCreateView(generics.ListCreateAPIView):
         serializer.save(slug=slug)
 #new 
 
-'''class ProcedureListView(generics.ListAPIView):
-    serializer_class = ProcedureSerializer
-    permission_classes = [permissions.AllowAny]
-    
-    def get_queryset(self):
-        queryset = Procedure.objects.filter(status='published')
-        
-        # Filtrage par catégorie
-        category = self.request.query_params.get('category', None)
-        if category:
-            queryset = queryset.filter(category__icontains=category)
-        
-        # Filtrage par difficulté
-        difficulty = self.request.query_params.get('difficulty', None)
-        if difficulty:
-            queryset = queryset.filter(difficulty=difficulty)
-        
-        # Filtrage par tag
-        tag = self.request.query_params.get('tag', None)
-        if tag:
-            queryset = queryset.filter(tags__name__icontains=tag)
-        
-        # Tri
-        sort = self.request.query_params.get('sort', '-created_at')
-        if sort in ['created_at', '-created_at', 'views', '-views', 'likes', '-likes']:
-            queryset = queryset.order_by(sort)
-        
-        return queryset'''
-
-'''class ProcedureDetailView(generics.RetrieveAPIView):
-    serializer_class = ProcedureSerializer
-    permission_classes = [permissions.AllowAny]
-    queryset = Procedure.objects.all()
-    
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        
-        # Incrémenter le compteur de vues
-        if request.user.is_authenticated:
-            # Enregistrer l'interaction de vue
-            ProcedureInteraction.objects.get_or_create(
-                user=request.user,
-                procedure=instance,
-                interaction_type='view'
-            )
-        else:
-            # Pour les utilisateurs anonymes, simplement incrémenter le compteur
-            instance.views = F('views') + 1
-            instance.save(update_fields=['views'])
-        
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)'''
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -683,49 +699,51 @@ def procedure_interaction(request, procedure_id):
 
 
 
-
-'''@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def mark_all_notifications_read(request):
-    # Marquer toutes les notifications de l'utilisateur comme lues
-    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
-    return Response({"message": "Toutes les notifications ont été marquées comme lues"}, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def mark_all_notifications_read(request):
-    # Marquer toutes les notifications de l'utilisateur comme lues
-    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
-    return Response({"message": "Toutes les notifications ont été marquées comme lues"}, status=status.HTTP_200_OK)
-
-
+  
 class NotificationListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)'''
-        
+        cache_key = f"notifications_{self.request.user.id}_all"
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
 
-class NotificationListView(generics.ListAPIView):
-    """Liste toutes les notifications de l'utilisateur connecté"""
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = NotificationSerializer
-
-    def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+        qs = Notification.objects.filter(user=self.request.user).order_by('-created_at')
+        cache.set(cache_key, qs, 120)  # 2 min
+        return qs
 
 class UnreadNotificationListView(generics.ListAPIView):
-    """Liste seulement les notifications non lues"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(
-            user=self.request.user, 
-            is_read=False
-        ).order_by('-created_at')
+        cache_key = f"notifications_{self.request.user.id}_unread"
+        cached_qs = cache.get(cache_key)
+        if cached_qs is not None:
+            return cached_qs
 
+        qs = Notification.objects.filter(user=self.request.user, is_read=False).order_by('-created_at')
+        cache.set(cache_key, qs, 120)
+        return qs
+    
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mark_notification_read(request, pk):
+    try:
+        notification = Notification.objects.get(pk=pk, user=request.user)
+        notification.is_read = True
+        notification.save()
+
+        # Invalider les caches
+        cache.delete(f"notifications_{request.user.id}_all")
+        cache.delete(f"notifications_{request.user.id}_unread")
+
+        return Response({"message": "Notification marquée comme lue"}, status=status.HTTP_200_OK)
+    except Notification.DoesNotExist:
+        return Response({"error": "Notification non trouvée"}, status=status.HTTP_404_NOT_FOUND)
+       
 class NotificationDetailView(generics.RetrieveUpdateAPIView):
     """Détail d'une notification et marquer comme lue"""
     permission_classes = [permissions.IsAuthenticated]

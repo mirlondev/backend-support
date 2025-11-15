@@ -2,6 +2,8 @@ import os, re, mimetypes
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils.timesince import timesince
+from django.utils.timezone import timezone
+
 from cloudinary import CloudinaryImage
 from .models import (
     Client, Technician, Ticket, TicketImage,
@@ -224,16 +226,8 @@ class TicketSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class MessageSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    user_type = serializers.CharField(source='user.userType', read_only=True)
 
-    class Meta:
-        model = Message
-        fields = ['id', 'ticket', 'user', 'user_name', 'user_type',
-                  'content', 'image', 'timestamp', 'is_whatsapp',
-                  'whatsapp_status', 'whatsapp_sid']
-        read_only_fields = ['id', 'timestamp', 'user']
+# Dans MessageSerializer
 class MessageSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     user_type = serializers.SerializerMethodField()
@@ -249,29 +243,17 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'timestamp', 'user']
     
     def get_user_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}"
+        # OPTIMISÉ : évite les requêtes si select_related
+        if hasattr(obj, 'user'):
+            return f"{obj.user.first_name} {obj.user.last_name}"
+        return "Unknown"
     
     def get_user_type(self, obj):
-        return obj.user.userType
+        return getattr(obj.user, 'userType', 'unknown')
     
     def get_is_own_message(self, obj):
         request = self.context.get('request')
-        if request and request.user:
-            return obj.user == request.user
-        return False
-    
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        
-        # Ajouter l'URL complète de l'image si elle existe
-        if instance.image and hasattr(instance.image, 'url'):
-            request = self.context.get('request')
-            if request:
-                representation['image_url'] = request.build_absolute_uri(instance.image.url)
-            else:
-                representation['image_url'] = instance.image.url
-        
-        return representation
+        return bool(request and request.user and obj.user_id == request.user.id)
 
 class TicketSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(read_only=True)

@@ -102,7 +102,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
             # Utilisation de l'UUID au lieu de l'ID numérique
             uid = urlsafe_base64_encode(force_bytes(str(user.pk)))
             token = token_generator.make_token(user)
-            reset_link = f"http://localhost:5173/reset-password/{uid}/{token}"
+            reset_link = f"https://regal-support.netlify.app/reset-password/{uid}/{token}"
 
             # 🔹 envoie email
             send_mail(
