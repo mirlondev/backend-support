@@ -109,6 +109,7 @@ MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 CORS_ALLOWED_ORIGINS = [
     "https://ton-frontend.vercel.app",
 ]
+APPEND_SLASH = True
 
 # ------------------------------------------------------------------
 # CLOUDINARY
@@ -166,5 +167,5 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('GMAIL_USER')          # ton.adresse@gmail.com
+EMAIL_HOST_USER = os.getenv('GMAIL_USER')
 EMAIL_HOST_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')  
