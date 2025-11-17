@@ -1,26 +1,23 @@
-# railway.toml
-
 [phases.setup]
-  aptPkgs = [
-    "libpango-1.0-0",
-    "libpangoft2-1.0-0",
-    "libpangocairo-1.0-0",
-    "libgobject-2.0-0",
-    "libglib2.0-0",
-    "libfontconfig1",
-    "libcairo2",
-    "libgdk-pixbuf-2.0-0",
-    "libgdk-pixbuf2.0-0",
-    "shared-mime-info",
-    "fonts-liberation",
-    "fonts-dejavu-core",
-    "fontconfig"  # Add this
-  ]
+aptPkgs = [
+  "libgobject-2.0-0",
+  "libglib2.0-0", 
+  "libpango-1.0-0",
+  "libpangoft2-1.0-0",
+  "libpangocairo-1.0-0",
+  "libcairo2",
+  "libgdk-pixbuf2.0-0",
+  "libfontconfig1",
+  "shared-mime-info",
+  "fonts-liberation",
+  "fonts-dejavu-core"
+]
+
 [phases.install]
-  cmds = ["pip install -r requirements.txt"]
+cmds = ["pip install -r requirements.txt"]
 
 [phases.build]
-  cmds = ["python manage.py collectstatic --noinput"]
+cmds = ["python manage.py collectstatic --noinput"]
 
 [start]
-  cmd = "bash start.sh"
+cmd = "bash start.sh"
