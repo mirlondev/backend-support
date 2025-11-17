@@ -1,5 +1,6 @@
+# railway.toml
 [phases.setup]
-aptPkgs = [
+  aptPkgs = [
     "libpango-1.0-0",
     "libpangoft2-1.0-0",
     "libpangocairo-1.0-0",
@@ -12,7 +13,13 @@ aptPkgs = [
     "shared-mime-info",
     "fonts-liberation",
     "fonts-dejavu-core"
-]
+  ]
+
+[phases.install]
+  cmds = ["pip install -r requirements.txt"]
+
+[phases.build]
+  cmds = ["python manage.py collectstatic --noinput"]
 
 [start]
-cmd = "bash start.sh"
+  cmd = "bash start.sh"
