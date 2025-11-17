@@ -17,7 +17,8 @@ python manage.py collectstatic --noinput --clear
 # Appliquer les migrations
 echo "🗄️  Running database migrations..."
 python manage.py migrate --noinput
-
+export FONTCONFIG_PATH=/etc/fonts
+export FONTCONFIG_FILE=/etc/fonts/fonts.conf
 # Démarrer Gunicorn
 echo "🚀 Starting Gunicorn server..."
 exec gunicorn support.wsgi:application \
