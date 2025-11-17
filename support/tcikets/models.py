@@ -63,6 +63,8 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    email = models.EmailField(('email address'), unique=True)   # <-- add this
+
 
     # ---------- Cloudinary helpers ----------
     def _get_cloudinary_public_id(self):
