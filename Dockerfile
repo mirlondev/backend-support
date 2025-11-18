@@ -57,4 +57,6 @@ WORKDIR /app/support
 EXPOSE 8080
 
 # Start command
+CMD ["bash", "/app/support/start.sh"]
+CMD ["bash", "/support/start.sh"]
 CMD ["bash", "start.sh"]
