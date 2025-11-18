@@ -23,9 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-dejavu-core \
     fontconfig \
-    # Build tools (if needed for other packages)
+    # Build tools and PostgreSQL dependencies
     gcc \
     g++ \
+    libpq-dev \
     && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
