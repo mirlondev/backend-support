@@ -90,8 +90,7 @@ if DEBUG:
 # STATIC & MEDIA
 # ------------------------------------------------------------------
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
-# OU créer conditionnellement
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')# OU créer conditionnellement
 STATICFILES_DIRS = []
 static_dir = os.path.join(BASE_DIR, 'static')
 if os.path.exists(static_dir):
