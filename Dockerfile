@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangoft2-1.0-0 \
     libpangocairo-1.0-0 \
     libcairo2 \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     libfontconfig1 \
     shared-mime-info \
     # Fonts
@@ -52,7 +52,7 @@ RUN python manage.py collectstatic --noinput --clear
 RUN chmod +x /app/support/start.sh
 
 # Expose port (Railway will use $PORT environment variable)
-EXPOSE 8080
+EXPOSE 8000
 
 # Start command
 CMD ["bash", "/app/support/start.sh"]
