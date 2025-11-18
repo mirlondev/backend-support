@@ -46,14 +46,11 @@ COPY . .
 # Set working directory to support folder (where manage.py is)
 WORKDIR /app/support
 
-# Collect static files
-RUN python manage.py collectstatic --noinput --clear
-
 # Make start.sh executable
 RUN chmod +x /app/support/start.sh
 
 # Expose port (Railway will use $PORT environment variable)
-EXPOSE 8000
+EXPOSE 8080
 
 # Start command
 CMD ["bash", "/app/support/start.sh"]
