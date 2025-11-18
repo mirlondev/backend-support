@@ -47,7 +47,7 @@ COPY . .
 WORKDIR /app/support
 
 # Make start.sh executable
-RUN chmod +x start.sh
+#RUN chmod +x start.sh
 
 # Expose port (Railway will use $PORT environment variable)
 EXPOSE 8080
