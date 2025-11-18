@@ -22,7 +22,9 @@ urlpatterns = [
 
 
     # Tickets
-    path("tickets/export/<str:file_format>/", views.ExportTicketPDFView.as_view(), name='export-tickets'),
+    path("tickets/export/excel/", views.ExportTicketPDFView.as_view(), name='export-tickets'),
+      path("tickets/export/pdf/", views.ExportTicketPDFView.as_view(), name='export-tickets'),
+
     path('tickets/', views.TicketListCreateView.as_view(), name='ticket-list'),
     path('tickets/<uuid:id>/', views.TicketRetrieveUpdateDestroyView.as_view(), name='ticket-detail'),
     path('tickets/<uuid:pk>/<str:action>/', views.TicketActionsView.as_view(), name='ticket-actions'),
