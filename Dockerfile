@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies for WeasyPrint
+# Install system dependencies for WeasyPrint and PostgreSQL
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # WeasyPrint core dependencies
     libgobject-2.0-0 \
@@ -40,14 +40,18 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Copy project files
+# Copy entire project
 COPY . .
 
-# Set working directory to support folder (where manage.py is)
-WORKDIR /app/support
+# List files to debug (remove this later)
+RUN echo "=== Files in /app ===" && ls -la /app && \
+    echo "=== Files in /app/support ===" && ls -la /app/support || echo "support folder not found"
 
-# Make start.sh executable
-#RUN chmod +x start.sh
+# Make start.sh executable wherever it is
+RUN find /app -name "start.sh" -exec chmod +x {} \;
+
+# Set working directory to support folder
+WORKDIR /app/support
 
 # Expose port (Railway will use $PORT environment variable)
 EXPOSE 8080
