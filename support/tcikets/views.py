@@ -651,6 +651,16 @@ class MonthlyReportExcelView(APIView):
         month = request.GET.get('month', current_date.month)
         year = request.GET.get('year', current_date.year)
         
+        
+        try:
+            month = int(str(month).strip('/'))
+            year  = int(str(year).strip('/'))
+        except ValueError:
+            return Response(
+                {'error': 'Month and year must be valid integers'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         try:
             month = int(month)
             year = int(year)
